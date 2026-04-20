@@ -130,27 +130,34 @@ export const generatePDF = async (venda, cliente, itens) => {
   doc.text('Obrigado pela preferência!', 105, 280, { align: 'center' });
 
   // Salvar PDF
-  const fileName = `Pedido_${cliente?.nome?.split(' ')[0] || 'Cliente'}_${new Date().getTime()}.pdf`;
+  const fileBaseName = `Recibo_${cliente?.nome?.split(' ')[0] || 'Venda'}_${new Date().getTime()}.pdf`;
 
   if (Capacitor.isNativePlatform()) {
     try {
       const pdfBase64 = doc.output('datauristring').split(',')[1];
-      
+
+      // Salva no Cache (Pasta segura e que NUNCA falha por permissão)
       const savedFile = await Filesystem.writeFile({
-        path: fileName,
+        path: fileBaseName,
         data: pdfBase64,
         directory: Directory.Cache
       });
 
+      // Abre o menu de compartilhamento do Android
+      // O usuário pode escolher "Salvar no dispositivo", "WhatsApp", etc.
       await Share.share({
-        dialogTitle: 'Compartilhar Recibo',
-        files: [savedFile.uri]
+        title: 'Recibo de Venda',
+        text: `Recibo de ${cliente?.nome || 'Cliente'}`,
+        url: savedFile.uri,
+        dialogTitle: 'Abrir ou Enviar Recibo'
       });
+
     } catch (error) {
-      console.error('Erro ao salvar/compartilhar PDF:', error);
-      alert('Erro ao gerar o PDF. Verifique as permissões do aplicativo.');
+      console.error('Erro ao processar PDF:', error);
+      alert('Não foi possível gerar ou compartilhar o PDF.');
     }
   } else {
-    doc.save(fileName);
+    // No navegador (PC), baixa direto
+    doc.save(fileBaseName);
   }
 };

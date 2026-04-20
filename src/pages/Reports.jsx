@@ -8,7 +8,7 @@ export default function Reports() {
   const [vendas, setVendas] = useState([]);
   const [clientes, setClientes] = useState({});
   const [loading, setLoading] = useState(true);
-  
+
   // Filtros
   const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
@@ -30,7 +30,7 @@ export default function Reports() {
 
   async function fetchDados() {
     setLoading(true);
-    
+
     // Buscar clientes para mapear nomes
     const { data: cData } = await supabase.from('clientes').select('id, nome, local');
     const cMap = {};
@@ -38,7 +38,7 @@ export default function Reports() {
       cData.forEach(c => { cMap[c.id] = c; });
       setClientes(cMap);
     }
-    
+
     // Buscar vendas no período
     const { data: vData, error } = await supabase
       .from('vendas')
@@ -46,11 +46,11 @@ export default function Reports() {
       .gte('data', `${startDate}T00:00:00.000Z`)
       .lte('data', `${endDate}T23:59:59.999Z`)
       .order('data', { ascending: false });
-      
+
     if (!error && vData) {
       setVendas(vData);
     }
-    
+
     setLoading(false);
   };
 
@@ -68,12 +68,12 @@ export default function Reports() {
     setPartialPayment('');
     setLoadingItems(true);
     setSalePayments([]);
-    
+
     const { data, error } = await supabase
       .from('itens_venda')
       .select('quantidade, valor, produtos(nome)')
       .eq('venda_id', sale.id);
-      
+
     if (!error && data) {
       const formattedItems = data.map(item => ({
         produto_nome: item.produtos?.nome || 'Produto Removido',
@@ -88,7 +88,7 @@ export default function Reports() {
       .select('valor, data')
       .eq('venda_id', sale.id)
       .order('data', { ascending: true });
-      
+
     if (payData) {
       setSalePayments(payData);
     }
@@ -106,9 +106,9 @@ export default function Reports() {
   const handleGeneratePDF = () => {
     if (!selectedSaleDetail) return;
     const cliente = clientes[selectedSaleDetail.cliente_id];
-    
+
     const originalTotal = saleItems.reduce((acc, item) => acc + (item.quantidade * item.valor), 0);
-    
+
     const vendaMock = {
       id: selectedSaleDetail.id,
       total: selectedSaleDetail.total, // Saldo Devedor
@@ -117,7 +117,7 @@ export default function Reports() {
       data: selectedSaleDetail.data,
       pagamentos: salePayments
     };
-    
+
     generatePDF(vendaMock, cliente, saleItems);
   };
 
@@ -126,32 +126,32 @@ export default function Reports() {
       alert('Digite um valor válido.');
       return;
     }
-    
+
     const paymentValue = Number(partialPayment);
     const currentTotal = Number(selectedSaleDetail.total);
     const newTotal = currentTotal - paymentValue;
-    
+
     let newStatus = selectedSaleDetail.status;
     if (newTotal <= 0) {
       newStatus = 'Pago';
     } else if (newStatus === 'Pendente' || newStatus === 'Parcial') {
       newStatus = 'Parcial';
     }
-    
+
     setIsUpdatingPayment(true);
-    
+
     const { error } = await supabase
       .from('vendas')
       .update({ total: newTotal < 0 ? 0 : newTotal, status: newStatus })
       .eq('id', selectedSaleDetail.id);
-      
+
     if (!error) {
       // Registrar no histórico de pagamentos
       await supabase.from('pagamentos').insert({ venda_id: selectedSaleDetail.id, valor: paymentValue });
-      
+
       const newPayData = [...salePayments, { valor: paymentValue, data: new Date().toISOString() }];
       setSalePayments(newPayData);
-      
+
       setVendas(vendas.map(v => v.id === selectedSaleDetail.id ? { ...v, total: newTotal < 0 ? 0 : newTotal, status: newStatus } : v));
       setSelectedSaleDetail({ ...selectedSaleDetail, total: newTotal < 0 ? 0 : newTotal, status: newStatus });
       setPartialPayment('');
@@ -159,7 +159,7 @@ export default function Reports() {
     } else {
       alert('Erro ao registrar pagamento.');
     }
-    
+
     setIsUpdatingPayment(false);
   };
 
@@ -168,9 +168,9 @@ export default function Reports() {
     const matchName = cliente ? cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) : false;
     const matchLocal = cliente && cliente.local ? cliente.local.toLowerCase().includes(searchTerm.toLowerCase()) : false;
     const matchSearch = matchName || matchLocal;
-    
+
     const matchStatus = statusFilter === 'Todos' || v.status === statusFilter;
-    
+
     return matchSearch && matchStatus;
   });
 
@@ -183,7 +183,7 @@ export default function Reports() {
         <h2 style={{ fontSize: '18px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Filter size={20} /> Filtros
         </h2>
-        
+
         <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
           <div className="input-group" style={{ flex: 1, marginBottom: 0 }}>
             <label>Data Inicial</label>
@@ -199,10 +199,10 @@ export default function Reports() {
           <label>Buscar Cliente ou Local</label>
           <div style={{ position: 'relative' }}>
             <Search size={16} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
-            <input 
-              type="text" 
-              placeholder="Digite o nome ou bairro..." 
-              value={searchTerm} 
+            <input
+              type="text"
+              placeholder="Digite o nome ou bairro..."
+              value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{ paddingLeft: '36px' }}
             />
@@ -232,7 +232,7 @@ export default function Reports() {
       </div>
 
       <h3 style={{ fontSize: '16px', marginBottom: '12px' }}>Histórico de Vendas</h3>
-      
+
       {loading ? (
         <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>Carregando...</div>
       ) : filteredVendas.length === 0 ? (
@@ -256,20 +256,20 @@ export default function Reports() {
                   R$ {Number(venda.total).toFixed(2)}
                 </div>
               </div>
-              
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
                 <span className={`badge badge-${venda.status.toLowerCase()}`}>
                   {venda.status}
                 </span>
-                
-                <select 
+
+                <select
                   value={venda.status}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => handleStatusChange(venda.id, e.target.value)}
-                  style={{ 
-                    padding: '4px 8px', 
-                    borderRadius: '4px', 
-                    border: '1px solid var(--border)', 
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border)',
                     background: 'var(--background)',
                     fontSize: '12px'
                   }}
@@ -285,8 +285,8 @@ export default function Reports() {
       )}
       {/* Sale Detail Modal */}
       {selectedSaleDetail && (
-        <div style={{ 
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.6)', zIndex: 110,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '16px', backdropFilter: 'blur(2px)'
@@ -298,7 +298,7 @@ export default function Reports() {
                 <X size={24} />
               </button>
             </div>
-            
+
             <div style={{ padding: '16px', overflowY: 'auto', flex: 1 }}>
               <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--background)', borderRadius: 'var(--radius-md)' }}>
                 <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Data: {new Date(selectedSaleDetail.data).toLocaleDateString('pt-BR')}</div>
@@ -313,22 +313,22 @@ export default function Reports() {
                 <div style={{ marginBottom: '20px', padding: '16px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
                   <h3 style={{ fontSize: '14px', marginBottom: '12px', color: 'var(--text-main)', fontWeight: '600' }}>Registrar Pagamento Parcial</h3>
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-                    <div className="input-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <div className="input-group" style={{ flex: 4, marginBottom: 0 }}>
                       <label style={{ fontSize: '12px' }}>Valor Pago (R$)</label>
-                      <input 
-                        type="number" 
-                        step="0.01" 
-                        value={partialPayment} 
-                        onChange={(e) => setPartialPayment(e.target.value)} 
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={partialPayment}
+                        onChange={(e) => setPartialPayment(e.target.value)}
                         placeholder="Ex: 50.00"
-                        style={{ padding: '12px 16px', fontSize: '16px' }}
+                        style={{ padding: '12px 16px', fontSize: '18px', width: '100%' }}
                       />
                     </div>
-                    <button 
-                      className="btn btn-secondary" 
-                      onClick={handlePartialPayment} 
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handlePartialPayment}
                       disabled={isUpdatingPayment || !partialPayment}
-                      style={{ padding: '8px 12px', height: 'auto', fontSize: '12px', whiteSpace: 'nowrap' }}
+                      style={{ flex: 1, padding: '8px 4px', height: '48px', fontSize: '11px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
                       {isUpdatingPayment ? '...' : 'Descontar'}
                     </button>
@@ -351,7 +351,7 @@ export default function Reports() {
               )}
 
               <h3 style={{ fontSize: '14px', marginBottom: '12px', color: 'var(--text-muted)' }}>Itens Comprados</h3>
-              
+
               {loadingItems ? (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Carregando itens...</div>
               ) : (
@@ -368,7 +368,7 @@ export default function Reports() {
                 </div>
               )}
             </div>
-            
+
             <div style={{ padding: '16px', borderTop: '1px solid var(--border)' }}>
               <button className="btn btn-primary" onClick={handleGeneratePDF} disabled={loadingItems} style={{ width: '100%' }}>
                 <Download size={18} />
