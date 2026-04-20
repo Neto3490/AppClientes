@@ -25,9 +25,10 @@ export default function Reports() {
 
   useEffect(() => {
     fetchDados();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate]);
 
-  const fetchDados = async () => {
+  async function fetchDados() {
     setLoading(true);
     
     // Buscar clientes para mapear nomes
@@ -320,14 +321,14 @@ export default function Reports() {
                         value={partialPayment} 
                         onChange={(e) => setPartialPayment(e.target.value)} 
                         placeholder="Ex: 50.00"
-                        style={{ padding: '8px 12px' }}
+                        style={{ padding: '12px 16px', fontSize: '16px' }}
                       />
                     </div>
                     <button 
                       className="btn btn-secondary" 
                       onClick={handlePartialPayment} 
                       disabled={isUpdatingPayment || !partialPayment}
-                      style={{ padding: '8px 16px', height: '42px', fontSize: '14px', whiteSpace: 'nowrap', width: 'auto' }}
+                      style={{ padding: '8px 12px', height: 'auto', fontSize: '12px', whiteSpace: 'nowrap' }}
                     >
                       {isUpdatingPayment ? '...' : 'Descontar'}
                     </button>

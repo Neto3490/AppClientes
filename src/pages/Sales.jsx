@@ -12,8 +12,7 @@ export default function Sales() {
   const [status, setStatus] = useState('Pendente');
   const [cart, setCart] = useState([]);
   
-  const [selectedProduto, setSelectedProduto] = useState('');
-  const [quantidade, setQuantidade] = useState(1);
+
   
   const [loading, setLoading] = useState(false);
   const [savedVendaId, setSavedVendaId] = useState(null);
@@ -22,7 +21,7 @@ export default function Sales() {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
+  async function fetchData() {
     const { data: cData } = await supabase.from('clientes').select('*').order('nome');
     const { data: pData } = await supabase.from('produtos').select('*').order('nome');
     

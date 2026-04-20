@@ -5,7 +5,7 @@ import { LogOut, TrendingUp, Users, Package, Clock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard() {
-  const { logout, user } = useAuth();
+  const { logout } = useAuth();
   const [loading, setLoading] = useState(true);
   
   const [stats, setStats] = useState({
@@ -23,7 +23,7 @@ export default function Dashboard() {
     fetchDashboardData();
   }, []);
 
-  const fetchDashboardData = async () => {
+  async function fetchDashboardData() {
     setLoading(true);
     
     try {

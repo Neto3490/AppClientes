@@ -27,7 +27,7 @@ export default function Clients() {
     fetchClients();
   }, []);
 
-  const fetchClients = async () => {
+  async function fetchClients() {
     setLoading(true);
     const { data, error } = await supabase
       .from('clientes')
