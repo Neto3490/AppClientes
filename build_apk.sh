@@ -23,7 +23,7 @@ echo "Instalando plataformas e build-tools..."
 export ANDROID_HOME=/home/neto/Android/Sdk
 
 echo "=== Compilando o App ==="
-cd /media/neto/PARTICULAR/AppAntgravit
+cd /media/neto/PARTICULAR/AppAntgravit3
 npm run build
 npx cap sync android
 cd android

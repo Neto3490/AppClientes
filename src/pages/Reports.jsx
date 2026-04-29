@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, Calendar, Filter, X, Download } from 'lucide-react';
+import { Search, Calendar, Filter, X, Download, Share2, Edit2 } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { generatePDF } from '../services/pdfService';
+import { shareReceiptImage } from '../services/imageService';
+import { cancelNotification } from '../services/notificationService';
+import { useNotifications } from '../context/NotificationContext';
+import ReceiptToImage from '../components/ReceiptToImage';
+import { useRef } from 'react';
 
 export default function Reports() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { fetchNotifications } = useNotifications();
   const [vendas, setVendas] = useState([]);
   const [clientes, setClientes] = useState({});
+  const [produtos, setProdutos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Filtros
@@ -22,11 +32,36 @@ export default function Reports() {
   const [loadingItems, setLoadingItems] = useState(false);
   const [partialPayment, setPartialPayment] = useState('');
   const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  
+  const receiptRef = useRef(null);
 
   useEffect(() => {
     fetchDados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate]);
+
+  useEffect(() => {
+    if (location.state?.openVendaId) {
+      handleOpenSpecificSale(location.state.openVendaId);
+    }
+  }, [location.state]);
+
+  async function handleOpenSpecificSale(vendaId) {
+    const { data: vendaData } = await supabase.from('vendas').select('*').eq('id', vendaId).single();
+    if (vendaData) {
+      // Garantir que clientes estejam carregados para o modal
+      if (Object.keys(clientes).length === 0) {
+        const { data: cData } = await supabase.from('clientes').select('id, nome, local');
+        const cMap = {};
+        if (cData) {
+          cData.forEach(c => { cMap[c.id] = c; });
+          setClientes(cMap);
+        }
+      }
+      openSaleDetail(vendaData);
+    }
+  }
 
   async function fetchDados() {
     setLoading(true);
@@ -37,6 +72,12 @@ export default function Reports() {
     if (cData) {
       cData.forEach(c => { cMap[c.id] = c; });
       setClientes(cMap);
+    }
+
+    // Buscar produtos
+    const { data: pData } = await supabase.from('produtos').select('id, nome, valor').order('nome');
+    if (pData) {
+      setProdutos(pData);
     }
 
     // Buscar vendas no período
@@ -121,6 +162,18 @@ export default function Reports() {
     generatePDF(vendaMock, cliente, saleItems);
   };
 
+  const handleShareImage = async () => {
+    if (!selectedSaleDetail || !receiptRef.current) return;
+    setIsSharing(true);
+    try {
+      await shareReceiptImage(receiptRef.current, `comprovante_${selectedSaleDetail.id.substring(0, 8)}.png`);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   const handlePartialPayment = async () => {
     if (!partialPayment || isNaN(partialPayment) || Number(partialPayment) <= 0) {
       alert('Digite um valor válido.');
@@ -155,6 +208,15 @@ export default function Reports() {
       setVendas(vendas.map(v => v.id === selectedSaleDetail.id ? { ...v, total: newTotal < 0 ? 0 : newTotal, status: newStatus } : v));
       setSelectedSaleDetail({ ...selectedSaleDetail, total: newTotal < 0 ? 0 : newTotal, status: newStatus });
       setPartialPayment('');
+      
+      // Atualizar notificações
+      fetchNotifications();
+      
+      // Se quitado, cancelar notificação local
+      if (newTotal <= 0) {
+        cancelNotification(selectedSaleDetail.id);
+      }
+      
       alert('Pagamento descontado com sucesso!');
     } else {
       alert('Erro ao registrar pagamento.');
@@ -350,7 +412,16 @@ export default function Reports() {
                 </div>
               )}
 
-              <h3 style={{ fontSize: '14px', marginBottom: '12px', color: 'var(--text-muted)' }}>Itens Comprados</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>Itens Comprados</h3>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => navigate('/sales', { state: { editVendaId: selectedSaleDetail.id } })}
+                  style={{ padding: '4px 8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Edit2 size={14} /> Editar Venda
+                </button>
+              </div>
 
               {loadingItems ? (
                 <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Carregando itens...</div>
@@ -369,11 +440,33 @@ export default function Reports() {
               )}
             </div>
 
-            <div style={{ padding: '16px', borderTop: '1px solid var(--border)' }}>
-              <button className="btn btn-primary" onClick={handleGeneratePDF} disabled={loadingItems} style={{ width: '100%' }}>
+            <div style={{ padding: '16px', borderTop: '1px solid var(--border)', display: 'flex', gap: '10px' }}>
+              <button className="btn btn-primary" onClick={handleGeneratePDF} disabled={loadingItems} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 <Download size={18} />
-                Gerar PDF
+                PDF
               </button>
+              <button 
+                className="btn btn-secondary" 
+                onClick={handleShareImage} 
+                disabled={loadingItems || isSharing} 
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
+              >
+                <Share2 size={18} />
+                {isSharing ? '...' : 'Compartilhar'}
+              </button>
+            </div>
+            
+            {/* Hidden Receipt Component for capture */}
+            <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+              {selectedSaleDetail && (
+                <ReceiptToImage 
+                  ref={receiptRef}
+                  venda={selectedSaleDetail}
+                  cliente={clientes[selectedSaleDetail.cliente_id]}
+                  itens={saleItems}
+                  pagamentos={salePayments}
+                />
+              )}
             </div>
           </div>
         </div>

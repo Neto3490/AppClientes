@@ -1,13 +1,15 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import BottomNavigation from './BottomNavigation';
+import NotificationBell from './NotificationBell';
 
 export default function Layout({ title }) {
   return (
     <>
       {title && (
-        <header className="top-header">
+        <header className="top-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h1>{title}</h1>
+          <NotificationBell />
         </header>
       )}
       

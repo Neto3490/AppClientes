@@ -10,12 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/camera": "^7.0.5",
     "@capacitor/core": "^7.0.0",
     "@capacitor/filesystem": "^7.0.0",
+    "@capacitor/local-notifications": "^7.0.6",
     "@capacitor/share": "^7.0.0",
     "@supabase/supabase-js": "^2.103.3",
     "date-fns": "^4.1.0",
     "dotenv": "^17.4.2",
+    "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^1.8.0",

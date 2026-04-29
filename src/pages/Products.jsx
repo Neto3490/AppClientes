@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, Plus, Edit2, Trash2, X, Image as ImageIcon, Upload } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Camera as CapCamera, CameraResultType, CameraSource, CameraDirection } from '@capacitor/camera';
+import { Search, Plus, Edit2, Trash2, X, Image as ImageIcon, Upload, Camera } from 'lucide-react';
 
 export default function Products() {
   const [products, setProducts] = useState([]);
@@ -11,7 +13,7 @@ export default function Products() {
   
   // Form state
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({ nome: '', valor: '', estoque: '', imagem: '' });
+  const [formData, setFormData] = useState({ nome: '', valor: '', fabricante: 'Natu', imagem: '' });
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -41,46 +43,124 @@ export default function Products() {
       setFormData({ 
         nome: product.nome, 
         valor: product.valor, 
-        estoque: product.estoque || '', 
+        fabricante: product.fabricante || 'Natu', 
         imagem: product.imagem || '' 
       });
     } else {
       setEditingId(null);
-      setFormData({ nome: '', valor: '', estoque: '', imagem: '' });
+      setFormData({ nome: '', valor: '', fabricante: 'Natu', imagem: '' });
     }
     setIsModalOpen(true);
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setFormData({ nome: '', valor: '', estoque: '', imagem: '' });
+    setFormData({ nome: '', valor: '', fabricante: 'Natu', imagem: '' });
     setEditingId(null);
   };
 
-  const handleImageUpload = async (e) => {
+  const processAndUploadImage = async (file) => {
+    if (!file) return;
     try {
       setUploadingImage(true);
-      const file = e.target.files[0];
-      if (!file) return;
 
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      // Redimensiona para 700x933 e converte para WebP
+      const webpBlob = await resizeToWebP(file, 700, 933);
+      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.webp`;
 
       const { error: uploadError } = await supabase.storage
         .from('produtos')
-        .upload(filePath, file);
+        .upload(fileName, webpBlob, { contentType: 'image/webp' });
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from('produtos').getPublicUrl(filePath);
-      
-      setFormData({ ...formData, imagem: data.publicUrl });
+      const { data } = supabase.storage.from('produtos').getPublicUrl(fileName);
+      setFormData(prev => ({ ...prev, imagem: data.publicUrl }));
     } catch (error) {
       alert('Erro ao fazer upload da imagem. O bucket "produtos" foi criado e é público?');
       console.error(error);
     } finally {
       setUploadingImage(false);
+    }
+  };
+
+  const resizeToWebP = (file, targetW, targetH) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+
+        // Fundo branco
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, targetW, targetH);
+
+        // Centraliza mantendo proporção (cover)
+        const scale = Math.max(targetW / img.width, targetH / img.height);
+        const drawW = img.width * scale;
+        const drawH = img.height * scale;
+        const offsetX = (targetW - drawW) / 2;
+        const offsetY = (targetH - drawH) / 2;
+        ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Conversão falhou')), 'image/webp', 0.85);
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  const handleImageUpload = (e) => processAndUploadImage(e.target.files[0]);
+
+  // Abre a câmera nativa via @capacitor/camera
+  const handleCameraCapture = async () => {
+    if (uploadingImage) return;
+
+    try {
+      // Se não for nativo (ex: testando no navegador), tenta o input de arquivo com capture
+      if (!Capacitor.isNativePlatform()) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.setAttribute('capture', 'environment');
+        input.onchange = (e) => processAndUploadImage(e.target.files[0]);
+        input.click();
+        return;
+      }
+
+      // No Android Nativo
+      await CapCamera.requestPermissions();
+      
+      const photo = await CapCamera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Base64,
+        source: CameraSource.Camera,
+        direction: CameraDirection.Rear,
+        saveToGallery: false,
+      });
+
+      if (photo && photo.base64String) {
+        const base64 = photo.base64String;
+        const mimeType = `image/${photo.format}`;
+        const byteChars = atob(base64);
+        const byteNums = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          byteNums[i] = byteChars.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNums);
+        const blob = new Blob([byteArray], { type: mimeType });
+        await processAndUploadImage(blob);
+      }
+    } catch (err) {
+      if (err?.message !== 'User cancelled photos app' && err?.message !== 'User cancelled photo selection') {
+        console.error('Erro ao abrir câmera:', err);
+        alert('Erro ao abrir câmera: ' + (err.message || 'Verifique as permissões.'));
+      }
     }
   };
 
@@ -90,7 +170,7 @@ export default function Products() {
     const dataToSave = {
       nome: formData.nome,
       valor: parseFloat(formData.valor) || 0,
-      estoque: parseInt(formData.estoque) || 0,
+      fabricante: formData.fabricante || 'Natu',
       imagem: formData.imagem
     };
 
@@ -193,8 +273,15 @@ export default function Products() {
                 <span style={{ color: 'var(--secondary)', fontWeight: '600', fontSize: '15px' }}>
                   R$ {Number(product.valor).toFixed(2).replace('.', ',')}
                 </span>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  {product.estoque || 0} em est.
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  padding: '2px 6px',
+                  borderRadius: '8px',
+                  background: product.fabricante === 'Solar' ? 'rgba(245, 158, 11, 0.15)' : product.fabricante === 'Ambos' ? 'rgba(79, 70, 229, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                  color: product.fabricante === 'Solar' ? '#b45309' : product.fabricante === 'Ambos' ? 'var(--primary)' : 'var(--secondary)'
+                }}>
+                  {product.fabricante || 'Natu'}
                 </span>
               </div>
               
@@ -248,15 +335,28 @@ export default function Products() {
                   style={{ display: 'none' }} 
                   onChange={handleImageUpload} 
                 />
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingImage}
-                >
-                  <Upload size={18} />
-                  {uploadingImage ? 'Enviando...' : 'Escolher Imagem'}
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingImage}
+                    style={{ flex: 1 }}
+                  >
+                    <Upload size={18} />
+                    {uploadingImage ? 'Enviando...' : 'Galeria'}
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={handleCameraCapture}
+                    disabled={uploadingImage}
+                    style={{ flex: 1 }}
+                  >
+                    <Camera size={18} />
+                    {uploadingImage ? 'Enviando...' : 'Câmera'}
+                  </button>
+                </div>
               </div>
 
               <div className="input-group">
@@ -269,8 +369,12 @@ export default function Products() {
                   <input required type="number" step="0.01" name="valor" value={formData.valor} onChange={handleInputChange} />
                 </div>
                 <div className="input-group" style={{ flex: 1 }}>
-                  <label>Estoque</label>
-                  <input type="number" name="estoque" value={formData.estoque} onChange={handleInputChange} />
+                  <label>Fabricante</label>
+                  <select name="fabricante" value={formData.fabricante} onChange={handleInputChange}>
+                    <option value="Natu">Natu</option>
+                    <option value="Solar">Solar</option>
+                    <option value="Ambos">Ambos</option>
+                  </select>
                 </div>
               </div>
               

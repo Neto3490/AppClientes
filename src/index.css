@@ -11,6 +11,7 @@
   --text-main: #0F172A;
   --text-muted: #64748B;
   --border: #E2E8F0;
+  --success: #10B981;
   
   /* Gradient */
   --gradient-primary: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
@@ -239,4 +240,24 @@ body {
 .empty-state svg {
   color: var(--border);
   margin-bottom: 16px;
+}
+
+/* Custom Scrollbar for Product Grid */
+.product-grid-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.product-grid-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+}
+
+.product-grid-scroll::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 10px;
+  opacity: 0.5;
+}
+
+.product-card-hover:active {
+  transform: scale(0.95);
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, TrendingUp, Users, Package, Clock } from 'lucide-react';
+import { LogOut, TrendingUp, Users, Package, Clock, Bell, MessageCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function Dashboard() {
@@ -17,6 +17,7 @@ export default function Dashboard() {
   });
   
   const [ultimasVendas, setUltimasVendas] = useState([]);
+  const [lembretesRetorno, setLembretesRetorno] = useState([]);
   const [chartData, setChartData] = useState([]);
 
   useEffect(() => {
@@ -32,15 +33,25 @@ export default function Dashboard() {
       
       const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
       
+      // Calcular data de 30 dias atrás para lembretes
+      const trintaDiasAtrasInicio = new Date(hoje);
+      trintaDiasAtrasInicio.setDate(trintaDiasAtrasInicio.getDate() - 30);
+      trintaDiasAtrasInicio.setHours(0, 0, 0, 0);
+      
+      const trintaDiasAtrasFim = new Date(trintaDiasAtrasInicio);
+      trintaDiasAtrasFim.setHours(23, 59, 59, 999);
+      
       // Consultas paralelas para performance
       const [
         { data: vendasData },
         { count: countClientes },
-        { count: countProdutos }
+        { count: countProdutos },
+        { data: retornosData }
       ] = await Promise.all([
-        supabase.from('vendas').select('id, total, data, status, clientes(nome)').gte('data', primeiroDiaMes.toISOString()),
+        supabase.from('vendas').select('id, total, data, status, clientes(nome, telefone, local)').gte('data', primeiroDiaMes.toISOString()),
         supabase.from('clientes').select('*', { count: 'exact', head: true }),
-        supabase.from('produtos').select('*', { count: 'exact', head: true })
+        supabase.from('produtos').select('*', { count: 'exact', head: true }),
+        supabase.from('vendas').select('id, data, clientes(nome, telefone, local)').gte('data', trintaDiasAtrasInicio.toISOString()).lte('data', trintaDiasAtrasFim.toISOString())
       ]);
       
       let vHoje = 0;
@@ -74,6 +85,10 @@ export default function Dashboard() {
         setUltimasVendas(vendasData.sort((a,b) => new Date(b.data) - new Date(a.data)).slice(0, 5));
       }
 
+      if (retornosData) {
+        setLembretesRetorno(retornosData);
+      }
+
       setStats({
         vendidoHoje: vHoje,
         vendidoMes: vMes,
@@ -89,12 +104,17 @@ export default function Dashboard() {
     }
   };
 
+  const handleZapRetorno = (telefone, nome) => {
+    const msg = `Olá ${nome}! Tudo bem? Passando para saber se seus produtos da RSN CLEAN estão acabando e se precisa de algo novo hoje. 😊`;
+    window.open(`https://wa.me/55${telefone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   return (
     <div style={{ padding: '16px 0', paddingBottom: '80px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
           <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>Olá! 👋</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Aqui está o seu resumo de vendas.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Resumo da sua operação.</p>
         </div>
         <button onClick={logout} style={{ background: 'var(--surface)', border: '1px solid var(--border)', padding: '8px', borderRadius: 'var(--radius-md)', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
           <LogOut size={18} />
@@ -105,6 +125,31 @@ export default function Dashboard() {
         <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Carregando dados...</div>
       ) : (
         <>
+          {/* Seção de Lembretes de Retorno */}
+          {lembretesRetorno.length > 0 && (
+            <div className="card" style={{ marginBottom: '20px', border: '1px solid rgba(79, 70, 229, 0.2)', background: 'rgba(79, 70, 229, 0.02)' }}>
+              <h3 style={{ fontSize: '14px', marginBottom: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Bell size={18} /> Clientes para Retorno Hoje (30 dias)
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {lembretesRetorno.map(v => (
+                  <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'var(--surface)', borderRadius: '8px', boxShadow: 'var(--shadow-sm)' }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '600' }}>{v.clientes?.nome}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Comprou em {new Date(v.data).toLocaleDateString('pt-BR')}</div>
+                    </div>
+                    <button 
+                      onClick={() => handleZapRetorno(v.clientes?.telefone, v.clientes?.nome)}
+                      style={{ background: '#25D366', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                    >
+                      <MessageCircle size={14} /> Chamar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
             <div className="card" style={{ background: 'linear-gradient(135deg, var(--primary) 0%, #818CF8 100%)', color: 'white', border: 'none' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
