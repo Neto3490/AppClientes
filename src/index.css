@@ -261,3 +261,8 @@ body {
 .product-card-hover:active {
   transform: scale(0.95);
 }
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}

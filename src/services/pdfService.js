@@ -161,3 +161,77 @@ export const generatePDF = async (venda, cliente, itens) => {
     doc.save(fileBaseName);
   }
 };
+
+export const generateSummaryPDF = async (vendas, clientes, startDate, endDate, totalPeriodo, totalPendente) => {
+  const doc = new jsPDF();
+  const primaryColor = [79, 70, 229];
+
+  // Cabeçalho
+  doc.setFontSize(22);
+  doc.setTextColor(...primaryColor);
+  doc.setFont("helvetica", "bold");
+  doc.text('RSN CLEAN - RELATÓRIO GERAL', 14, 22);
+
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Período: ${new Date(startDate).toLocaleDateString('pt-BR')} até ${new Date(endDate).toLocaleDateString('pt-BR')}`, 14, 30);
+
+  // Resumo
+  doc.setFillColor(243, 244, 246);
+  doc.rect(14, 38, 182, 20, 'F');
+  
+  doc.setFontSize(11);
+  doc.setTextColor(40);
+  doc.setFont("helvetica", "bold");
+  doc.text('RESUMO DO PERÍODO', 18, 45);
+  
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Total no Período: R$ ${totalPeriodo.toFixed(2)}`, 18, 52);
+  doc.text(`Total Pendente: R$ ${totalPendente.toFixed(2)}`, 100, 52);
+
+  // Tabela de Vendas
+  const tableData = vendas.map(v => [
+    new Date(v.data).toLocaleDateString('pt-BR'),
+    clientes[v.cliente_id]?.nome || 'N/A',
+    v.status,
+    `R$ ${Number(v.total).toFixed(2)}`
+  ]);
+
+  autoTable(doc, {
+    startY: 65,
+    head: [['Data', 'Cliente', 'Status', 'Valor/Saldo']],
+    body: tableData,
+    theme: 'grid',
+    headStyles: { fillColor: primaryColor },
+    styles: { fontSize: 9, cellPadding: 3 },
+    columnStyles: {
+      0: { cellWidth: 25 },
+      1: { cellWidth: 'auto' },
+      2: { cellWidth: 30, halign: 'center' },
+      3: { cellWidth: 35, halign: 'right' }
+    }
+  });
+
+  const fileBaseName = `Relatorio_Geral_${startDate}_${endDate}.pdf`;
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const pdfBase64 = doc.output('datauristring').split(',')[1];
+      const savedFile = await Filesystem.writeFile({
+        path: fileBaseName,
+        data: pdfBase64,
+        directory: Directory.Cache
+      });
+      await Share.share({
+        title: 'Relatório Geral de Vendas',
+        url: savedFile.uri
+      });
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      alert('Erro ao gerar relatório.');
+    }
+  } else {
+    doc.save(fileBaseName);
+  }
+};

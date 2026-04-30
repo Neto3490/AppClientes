@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, Plus, Edit2, Trash2, X, FileText, Calendar, Download } from 'lucide-react';
+import { Contacts } from '@capacitor-community/contacts';
+import { Search, Plus, Edit2, Trash2, X, FileText, Calendar, Download, BookUser } from 'lucide-react';
 import { generatePDF } from '../services/pdfService';
 
 export default function Clients() {
@@ -149,6 +150,47 @@ export default function Clients() {
     generatePDF(vendaMock, selectedClientHistory, saleItems);
   };
 
+  const handleImportContact = async () => {
+    try {
+      const permission = await Contacts.checkPermissions();
+      if (permission.contacts !== 'granted') {
+        const req = await Contacts.requestPermissions();
+        if (req.contacts !== 'granted') {
+          alert('Permissão de contatos negada pelo sistema.');
+          return;
+        }
+      }
+
+      const { contact } = await Contacts.pickContact({
+        projection: {
+          name: true,
+          phones: true
+        }
+      });
+
+      if (contact) {
+        let phone = '';
+        if (contact.phones && contact.phones.length > 0) {
+          phone = handleMaskPhone(contact.phones[0].number || '');
+        }
+        
+        let nome = '';
+        if (contact.name) {
+          nome = contact.name.display || contact.name.given || '';
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          nome: nome || prev.nome,
+          telefone: phone || prev.telefone
+        }));
+      }
+    } catch (error) {
+      console.error('Erro ao importar contato:', error);
+      alert(`Erro ao abrir a agenda: ${error?.message || error}. (Verifique se as permissões de contatos estão liberadas nas configurações do Android)`);
+    }
+  };
+
   const filteredClients = clients.filter(c => 
     c.nome.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -243,6 +285,31 @@ export default function Clients() {
             </div>
             
             <form onSubmit={handleSubmit} style={{ padding: '16px' }}>
+              <button 
+                type="button" 
+                onClick={handleImportContact}
+                style={{ 
+                  width: '100%', 
+                  marginBottom: '16px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '8px', 
+                  padding: '12px', 
+                  background: 'var(--surface)', 
+                  border: '1px solid var(--primary)', 
+                  color: 'var(--primary)', 
+                  borderRadius: 'var(--radius-md)', 
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  transition: 'background 0.2s'
+                }}
+              >
+                <BookUser size={18} />
+                Importar da Agenda
+              </button>
+
               <div className="input-group">
                 <label>Nome do Cliente *</label>
                 <input required type="text" name="nome" value={formData.nome} onChange={handleInputChange} />

@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Search, Calendar, Filter, X, Download, Share2, Edit2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
-import { generatePDF } from '../services/pdfService';
+import { generatePDF, generateSummaryPDF } from '../services/pdfService';
 import { shareReceiptImage } from '../services/imageService';
 import { cancelNotification } from '../services/notificationService';
 import { useNotifications } from '../context/NotificationContext';
@@ -162,6 +162,14 @@ export default function Reports() {
     generatePDF(vendaMock, cliente, saleItems);
   };
 
+  const handleGenerateSummary = () => {
+    if (filteredVendas.length === 0) {
+      alert('Não há vendas no período filtrado para gerar relatório.');
+      return;
+    }
+    generateSummaryPDF(filteredVendas, clientes, startDate, endDate, totalPeriodo, totalPendente);
+  };
+
   const handleShareImage = async () => {
     if (!selectedSaleDetail || !receiptRef.current) return;
     setIsSharing(true);
@@ -293,7 +301,24 @@ export default function Reports() {
         </div>
       </div>
 
-      <h3 style={{ fontSize: '16px', marginBottom: '12px' }}>Histórico de Vendas</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <h3 style={{ fontSize: '16px', margin: 0 }}>Histórico de Vendas</h3>
+        <button 
+          className="btn btn-secondary" 
+          onClick={handleGenerateSummary}
+          style={{ 
+            padding: '10px 16px', 
+            fontSize: '14px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px', 
+            height: '45px',
+            fontWeight: '600'
+          }}
+        >
+          <Download size={18} /> Relatório Geral
+        </button>
+      </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>Carregando...</div>

@@ -244,9 +244,9 @@ export default function Products() {
           <p>Nenhum produto encontrado.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
           {filteredProducts.map(product => (
-            <div key={product.id} className="card" style={{ padding: '12px', display: 'flex', flexDirection: 'column' }}>
+            <div key={product.id} className="card" style={{ padding: '8px', display: 'flex', flexDirection: 'column' }}>
               <div style={{ 
                 width: '100%', 
                 height: '120px', 

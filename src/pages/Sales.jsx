@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Plus, Trash2, Save, FileText, MessageCircle, Image, Search, X } from 'lucide-react';
+import { Plus, Trash2, Save, FileText, MessageCircle, Image, Search, X, ShoppingCart } from 'lucide-react';
 import { sendWhatsAppMessage } from '../services/whatsappService';
 import { generatePDF } from '../services/pdfService';
 import { shareReceiptImage } from '../services/imageService';
@@ -29,6 +29,7 @@ export default function Sales() {
   const [editingVendaId, setEditingVendaId] = useState(null);
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [fabricanteFilter, setFabricanteFilter] = useState('Todos');
+  const [isCartModalOpen, setIsCartModalOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -318,24 +319,26 @@ export default function Sales() {
           )}
         </div>
         
-        <div className="input-group">
-          <label>Status</label>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} disabled={savedVendaId}>
-            <option value="Pendente">Pendente</option>
-            <option value="Pago">Pago</option>
-          </select>
-        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <div className="input-group" style={{ flex: 1 }}>
+            <label>Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} disabled={savedVendaId}>
+              <option value="Pendente">Pendente</option>
+              <option value="Pago">Pago</option>
+            </select>
+          </div>
 
-        <div className="input-group">
-          <label>Desconto (R$)</label>
-          <input 
-            type="number" 
-            step="0.01" 
-            value={desconto} 
-            onChange={(e) => setDesconto(e.target.value)} 
-            placeholder="0,00"
-            disabled={savedVendaId}
-          />
+          <div className="input-group" style={{ flex: 1 }}>
+            <label>Desconto (R$)</label>
+            <input 
+              type="number" 
+              step="0.01" 
+              value={desconto} 
+              onChange={(e) => setDesconto(e.target.value)} 
+              placeholder="0,00"
+              disabled={savedVendaId}
+            />
+          </div>
         </div>
       </div>
 
@@ -394,7 +397,7 @@ export default function Sales() {
         
         {/* Scrollable Product Grid */}
         <div className="product-grid-scroll" style={{ 
-          maxHeight: '340px', 
+          maxHeight: 'calc(100vh - 300px)', 
           overflowY: 'auto', 
           padding: '4px',
           background: 'rgba(0,0,0,0.02)',
@@ -404,8 +407,8 @@ export default function Sales() {
         }}>
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: '1fr 1fr', 
-            gap: '10px', 
+            gridTemplateColumns: 'repeat(3, 1fr)', 
+            gap: '6px', 
           }}>
             {produtos
               .filter(p => {
@@ -421,7 +424,7 @@ export default function Sales() {
                 onClick={() => handleAddToCart(p.id)} 
                 className="card product-card-hover"
                 style={{ 
-                  padding: '10px', 
+                  padding: '4px', 
                   display: 'flex', 
                   flexDirection: 'column', 
                   alignItems: 'center', 
@@ -433,17 +436,17 @@ export default function Sales() {
                   position: 'relative'
                 }}
               >
-                <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: '8px', background: 'var(--background)', marginBottom: '8px', overflow: 'hidden' }}>
+                <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: '6px', background: 'var(--background)', marginBottom: '3px', overflow: 'hidden' }}>
                   {p.imagem ? (
                     <img src={p.imagem} alt={p.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
-                       <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Sem Img</span>
+                       <span style={{ fontSize: '8px', color: 'var(--text-muted)' }}>Sem Img</span>
                     </div>
                   )}
                 </div>
-                <div style={{ fontSize: '12px', fontWeight: '600', textAlign: 'center', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-main)' }}>{p.nome}</div>
-                <div style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: '700', marginTop: '2px' }}>R$ {parseValue(p.valor).toFixed(2).replace('.', ',')}</div>
+                <div style={{ fontSize: '10px', fontWeight: '600', textAlign: 'center', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-main)' }}>{p.nome}</div>
+                <div style={{ fontSize: '10px', color: 'var(--primary)', fontWeight: '700', marginTop: '0px' }}>R$ {parseValue(p.valor).toFixed(2).replace('.', ',')}</div>
                 
               </div>
             ))}
@@ -451,91 +454,172 @@ export default function Sales() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: '16px' }}>
-        <h3 style={{ fontSize: '16px', marginBottom: '12px' }}>Carrinho ({cart.length})</h3>
-        
-        {cart.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center', padding: '10px' }}>Nenhum produto adicionado.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {cart.map((item, index) => (
-              <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: 'var(--background)', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(0,0,0,0.05)' }}>
-                    {item.imagem ? (
-                      <img src={item.imagem} alt={item.produto_nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                         <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Sem Img</span>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: '600', fontSize: '14px', color: 'var(--text-main)' }}>{item.produto_nome}</div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--background)', padding: '2px', borderRadius: '6px', border: '1px solid var(--border)' }}>
-                        <button onClick={() => updateQuantity(index, -1)} style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', border: 'none', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>-</button>
-                        <span style={{ fontWeight: '600', fontSize: '14px', minWidth: '16px', textAlign: 'center', color: 'var(--text-main)' }}>{item.quantidade}</span>
-                        <button onClick={() => updateQuantity(index, 1)} style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', border: 'none', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>+</button>
-                      </div>
-                      <div>
-                        R$ {parseValue(item.valor).toFixed(2).replace('.', ',')} = <span style={{ fontWeight: '600', color: 'var(--text-main)' }}>R$ {(Number(item.quantidade) * parseValue(item.valor)).toFixed(2).replace('.', ',')}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <button onClick={() => removeFromCart(index)} style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: 'var(--danger)', borderRadius: '8px', padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}>
-                  <Trash2 size={18} />
-                </button>
+      {/* Floating Cart Button */}
+      {cart.length > 0 && (
+        <button
+          onClick={() => setIsCartModalOpen(true)}
+          style={{
+            position: 'fixed',
+            bottom: '90px',
+            right: '20px',
+            width: '60px',
+            height: '60px',
+            borderRadius: '50%',
+            background: 'var(--primary)',
+            color: 'white',
+            border: 'none',
+            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            cursor: 'pointer',
+            transition: 'transform 0.2s'
+          }}
+          className="product-card-hover"
+        >
+          <ShoppingCart size={28} />
+          <span style={{
+            position: 'absolute',
+            top: '-5px',
+            right: '-5px',
+            background: 'var(--danger)',
+            color: 'white',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            width: '24px',
+            height: '24px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '2px solid white'
+          }}>
+            {cart.reduce((sum, item) => sum + item.quantidade, 0)}
+          </span>
+        </button>
+      )}
+
+      {/* Cart Modal */}
+      {isCartModalOpen && (
+        <div style={{ 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          background: 'rgba(0,0,0,0.6)', zIndex: 120,
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div className="card" style={{ 
+            width: '100%', maxWidth: '500px', padding: '0', maxHeight: '90vh', 
+            display: 'flex', flexDirection: 'column',
+            borderRadius: '24px 24px 0 0',
+            animation: 'slideUp 0.3s ease-out'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ShoppingCart size={22} color="var(--primary)" />
+                <h2 style={{ fontSize: '18px' }}>Seu Carrinho</h2>
               </div>
-            ))}
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)', fontWeight: 'bold', fontSize: '18px' }}>
-              <span>Total:</span>
-              <span style={{ color: 'var(--primary)' }}>R$ {totalGeral.toFixed(2).replace('.', ',')}</span>
+              <button onClick={() => setIsCartModalOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                <X size={24} />
+              </button>
+            </div>
+
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              {cart.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                  <ShoppingCart size={48} color="var(--border)" style={{ marginBottom: '16px' }} />
+                  <p style={{ color: 'var(--text-muted)' }}>Carrinho vazio</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {cart.map((item, index) => (
+                    <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '50px', height: '50px', borderRadius: '8px', background: 'var(--background)', overflow: 'hidden', flexShrink: 0 }}>
+                          {item.imagem ? (
+                            <img src={item.imagem} alt={item.produto_nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                               <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Sem Img</span>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: '600', fontSize: '14px', color: 'var(--text-main)' }}>{item.produto_nome}</div>
+                          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--background)', padding: '2px', borderRadius: '6px' }}>
+                              <button onClick={() => updateQuantity(index, -1)} style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', border: 'none', borderRadius: '4px', color: 'var(--text-main)' }}>-</button>
+                              <span style={{ fontWeight: '600', fontSize: '14px', minWidth: '16px', textAlign: 'center' }}>{item.quantidade}</span>
+                              <button onClick={() => updateQuantity(index, 1)} style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', border: 'none', borderRadius: '4px', color: 'var(--text-main)' }}>+</button>
+                            </div>
+                            <div style={{ fontWeight: '600', color: 'var(--primary)' }}>
+                              R$ {(Number(item.quantidade) * parseValue(item.valor)).toFixed(2).replace('.', ',')}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <button onClick={() => removeFromCart(index)} style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: 'var(--danger)', borderRadius: '8px', padding: '8px', cursor: 'pointer' }}>
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '20px', borderTop: '1px solid var(--border)', background: 'var(--background)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', fontWeight: 'bold', fontSize: '20px' }}>
+                <span>Total:</span>
+                <span style={{ color: 'var(--primary)' }}>R$ {totalGeral.toFixed(2).replace('.', ',')}</span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {!savedVendaId ? (
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={() => { handleSave(); }} 
+                    disabled={loading || cart.length === 0}
+                    style={{ height: '54px', fontSize: '16px' }}
+                  >
+                    <Save size={20} />
+                    {loading ? 'Salvando...' : (editingVendaId ? 'Atualizar Venda' : 'Finalizar Venda')}
+                  </button>
+                ) : (
+                  <>
+                    <div style={{ textAlign: 'center', padding: '8px', color: 'var(--secondary)', fontWeight: 'bold' }}>
+                      Venda salva com sucesso!
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <button className="btn btn-secondary" onClick={handlePDF}>
+                        <FileText size={18} />
+                        PDF
+                      </button>
+                      <button className="btn" style={{ background: '#25D366', color: 'white', border: 'none' }} onClick={handleWhatsApp}>
+                        <MessageCircle size={18} />
+                        WhatsApp
+                      </button>
+                      <button 
+                        className="btn" 
+                        style={{ gridColumn: 'span 2', background: 'var(--surface)', border: '1px solid var(--primary)', color: 'var(--primary)' }} 
+                        onClick={handleShareImage}
+                        disabled={isSharing}
+                      >
+                        <Image size={18} />
+                        {isSharing ? 'Gerando Imagem...' : 'Compartilhar Imagem'}
+                      </button>
+                    </div>
+                    
+                    <button className="btn" style={{ background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--text-main)', marginTop: '8px' }} onClick={() => { resetForm(); setIsCartModalOpen(false); }}>
+                      Nova Venda
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {!savedVendaId ? (
-          <button className="btn btn-primary" onClick={handleSave} disabled={loading || cart.length === 0 || !selectedCliente}>
-            <Save size={18} />
-            {loading ? 'Salvando...' : (editingVendaId ? 'Atualizar Venda' : 'Salvar Venda')}
-          </button>
-        ) : (
-          <>
-            <div style={{ textAlign: 'center', padding: '8px', color: 'var(--secondary)', fontWeight: 'bold' }}>
-              Venda salva com sucesso!
-            </div>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <button className="btn btn-secondary" onClick={handlePDF}>
-                <FileText size={18} />
-                PDF
-              </button>
-              <button className="btn" style={{ background: '#25D366', color: 'white', border: 'none' }} onClick={handleWhatsApp}>
-                <MessageCircle size={18} />
-                WhatsApp
-              </button>
-              <button 
-                className="btn" 
-                style={{ gridColumn: 'span 2', background: 'var(--surface)', border: '1px solid var(--primary)', color: 'var(--primary)' }} 
-                onClick={handleShareImage}
-                disabled={isSharing}
-              >
-                <Image size={18} />
-                {isSharing ? 'Gerando Imagem...' : 'Compartilhar Imagem'}
-              </button>
-            </div>
-            
-            <button className="btn" style={{ background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--text-main)', marginTop: '8px' }} onClick={resetForm}>
-              Nova Venda
-            </button>
-          </>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Client Selection Modal */}
       {isClientModalOpen && (
