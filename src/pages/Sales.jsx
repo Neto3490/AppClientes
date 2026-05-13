@@ -205,7 +205,7 @@ export default function Sales() {
           <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>Toque para Adicionar</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              {produtos.length} itens
+              {produtos.filter(p => p.ativo === true).length} itens
             </div>
           </div>
         </div>
@@ -269,7 +269,8 @@ export default function Sales() {
               .filter(p => {
                 const matchSearch = p.nome.toLowerCase().includes(productSearchTerm.toLowerCase());
                 const matchFab = fabricanteFilter === 'Todos' ? true : (p.fabricante === fabricanteFilter || p.fabricante === 'Ambos');
-                return matchSearch && matchFab;
+                const isAtivo = p.ativo === true;
+                return matchSearch && matchFab && isAtivo;
               })
               .map(p => (
               <div 
