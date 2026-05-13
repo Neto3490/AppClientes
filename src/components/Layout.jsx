@@ -1,7 +1,5 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import BottomNavigation from './BottomNavigation';
-import NotificationBell from './NotificationBell';
 
 export default function Layout({ title }) {
   return (
@@ -9,15 +7,12 @@ export default function Layout({ title }) {
       {title && (
         <header className="top-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h1>{title}</h1>
-          <NotificationBell />
         </header>
       )}
       
       <main className="container">
         <Outlet />
       </main>
-      
-      <BottomNavigation />
     </>
   );
 }

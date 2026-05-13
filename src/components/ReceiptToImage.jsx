@@ -1,4 +1,5 @@
 import React, { forwardRef } from 'react';
+import { Sparkles } from 'lucide-react';
 
 const ReceiptToImage = forwardRef(({ venda, cliente, itens, pagamentos = [] }, ref) => {
   if (!venda || !cliente) return null;
@@ -35,7 +36,26 @@ const ReceiptToImage = forwardRef(({ venda, cliente, itens, pagamentos = [] }, r
     >
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #f1f5f9', paddingBottom: '20px' }}>
-        <h1 style={{ color: '#4f46e5', fontSize: '28px', fontWeight: '800', margin: '0', letterSpacing: '-0.5px' }}>RSN CLEAN</h1>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+          <img src="/logo.png" alt="Logo" style={{ width: '80px', height: '80px', borderRadius: '50%' }} />
+        </div>
+        
+        <h1 style={{ 
+          color: '#4f46e5', 
+          fontSize: '32px', 
+          fontFamily: "'BlippoBlack', sans-serif",
+          margin: '0', 
+          letterSpacing: '-0.5px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
+        }}>
+          <Sparkles size={24} fill="#4f46e5" />
+          RSN CLEAN
+          <Sparkles size={24} fill="#4f46e5" />
+        </h1>
+
         <p style={{ fontSize: '14px', color: '#64748b', marginTop: '5px', fontWeight: '500' }}>COMPROVANTE DE VENDA</p>
       </div>
 
@@ -96,10 +116,14 @@ const ReceiptToImage = forwardRef(({ venda, cliente, itens, pagamentos = [] }, r
           <span style={{ fontWeight: '600' }}>R$ {totalItens.toFixed(2).replace('.', ',')}</span>
         </div>
         
-        {valorDesconto > 0 && (
+        {valorDesconto !== 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '14px' }}>
-            <span style={{ color: '#ef4444' }}>DESCONTO</span>
-            <span style={{ fontWeight: '600', color: '#ef4444' }}>- R$ {valorDesconto.toFixed(2).replace('.', ',')}</span>
+            <span style={{ color: valorDesconto > 0 ? '#ef4444' : '#3b82f6' }}>
+              {valorDesconto > 0 ? 'DESCONTO' : 'CONTA ANTERIOR'}
+            </span>
+            <span style={{ fontWeight: '600', color: valorDesconto > 0 ? '#ef4444' : '#3b82f6' }}>
+              {valorDesconto > 0 ? '-' : '+'} R$ {Math.abs(valorDesconto).toFixed(2).replace('.', ',')}
+            </span>
           </div>
         )}
 

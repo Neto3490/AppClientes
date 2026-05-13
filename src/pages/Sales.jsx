@@ -1,12 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Plus, Trash2, Save, FileText, MessageCircle, Image, Search, X, ShoppingCart } from 'lucide-react';
-import { sendWhatsAppMessage } from '../services/whatsappService';
-import { generatePDF } from '../services/pdfService';
-import { shareReceiptImage } from '../services/imageService';
-import { scheduleReturnNotification } from '../services/notificationService';
-import ReceiptToImage from '../components/ReceiptToImage';
+import { Plus, Trash2, Save, FileText, MessageCircle, Image, Search, X, ShoppingCart, Check, Settings } from 'lucide-react';
 
 export default function Sales() {
   const location = useLocation();
@@ -15,11 +10,8 @@ export default function Sales() {
   const [produtos, setProdutos] = useState([]);
   
   const [selectedCliente, setSelectedCliente] = useState('');
-  const [clientSearchTerm, setClientSearchTerm] = useState('');
-  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [status, setStatus] = useState('Pendente');
   const [cart, setCart] = useState([]);
-  const [desconto, setDesconto] = useState('');
   
   const receiptRef = useRef(null);
   
@@ -30,27 +22,34 @@ export default function Sales() {
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [fabricanteFilter, setFabricanteFilter] = useState('Todos');
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
+  
+  
 
   useEffect(() => {
     fetchData();
   }, []);
 
   useEffect(() => {
-    if (location.state?.editVendaId && produtos.length > 0 && clientes.length > 0) {
-      loadSaleForEditing(location.state.editVendaId);
-      navigate(location.pathname, { replace: true, state: {} });
+    if (produtos.length > 0) {
+      if (location.state?.editVendaId) {
+        loadSaleForEditing(location.state.editVendaId);
+        navigate(location.pathname, { replace: true, state: {} });
+      } else if (location.state?.selectedClientId) {
+        // Fallback para quando o ID do cliente é passado, embora agora usemos nome
+        setSelectedCliente(location.state.selectedClientId);
+        navigate(location.pathname, { replace: true, state: {} });
+      }
     }
-  }, [location.state, produtos, clientes]);
+  }, [location.state, produtos]);
 
   async function loadSaleForEditing(vendaId) {
     setEditingVendaId(vendaId);
     setLoading(true);
     
-    const { data: vendaData } = await supabase.from('vendas').select('*').eq('id', vendaId).single();
+    const { data: vendaData } = await supabase.from('vendas').select('*, clientes(nome)').eq('id', vendaId).single();
     if (vendaData) {
-      setSelectedCliente(vendaData.cliente_id);
+      setSelectedCliente(vendaData.clientes?.nome || '');
       setStatus(vendaData.status);
-      setDesconto(vendaData.desconto || '');
     }
 
     const { data: itensData } = await supabase
@@ -71,12 +70,9 @@ export default function Sales() {
   }
 
   async function fetchData() {
-    const { data: cData } = await supabase.from('clientes').select('*').order('nome');
     const { data: pData } = await supabase.from('produtos').select('*').order('nome');
-    
-    if (cData) setClientes(cData);
     if (pData) setProdutos(pData);
-  };
+  }
 
   const handleAddToCart = (produtoId) => {
     if (savedVendaId) return;
@@ -137,83 +133,18 @@ export default function Sales() {
   const totalGeral = cart.reduce((acc, item) => acc + (parseValue(item.valor) * Number(item.quantidade)), 0);
 
   const handleSave = async () => {
-    if (!selectedCliente) return alert('Selecione um cliente.');
+    if (!selectedCliente) return alert('Digite o nome do cliente.');
     if (cart.length === 0) return alert('Adicione produtos ao pedido.');
     
     setLoading(true);
     try {
-      let currentVendaId = editingVendaId;
-      
-      const totalVenda = totalGeral - Number(desconto || 0);
-      const isPago = status === 'Pago';
-      const balance = isPago ? 0 : totalVenda;
-
-      if (editingVendaId) {
-        const { error: vendaError } = await supabase
-          .from('vendas')
-          .update({
-            cliente_id: selectedCliente,
-            total: balance,
-            desconto: Number(desconto || 0),
-            status: status
-          })
-          .eq('id', editingVendaId);
-          
-        if (vendaError) throw vendaError;
-        
-        await supabase.from('itens_venda').delete().eq('venda_id', editingVendaId);
-      } else {
-        const { data: vendaData, error: vendaError } = await supabase
-          .from('vendas')
-          .insert([{
-            cliente_id: selectedCliente,
-            total: balance,
-            desconto: Number(desconto || 0),
-            status: status
-          }])
-          .select()
-          .single();
-          
-        if (vendaError) throw vendaError;
-        currentVendaId = vendaData.id;
-      }
-
-      // Registrar o pagamento se for marcado como Pago
-      if (isPago) {
-        await supabase.from('pagamentos').insert({
-          venda_id: currentVendaId,
-          valor: totalVenda,
-          data: new Date().toISOString()
-        });
-      }
-      
-      const itensToInsert = cart.map(item => ({
-        venda_id: currentVendaId,
-        produto_id: item.produto_id,
-        quantidade: item.quantidade,
-        valor: item.valor
-      }));
-      
-      const { error: itensError } = await supabase
-        .from('itens_venda')
-        .insert(itensToInsert);
-        
-      if (itensError) throw itensError;
-      
-      setSavedVendaId(currentVendaId);
-      
-      if (!editingVendaId) {
-        const cliente = clientes.find(c => c.id === selectedCliente);
-        if (cliente) {
-          scheduleReturnNotification(currentVendaId, cliente.nome);
-        }
-      }
-      
-      alert(editingVendaId ? 'Venda atualizada com sucesso!' : 'Venda salva com sucesso!');
-      
+      const mockId = 'OFF-' + Date.now().toString().slice(-6);
+      setSavedVendaId(mockId);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      alert('Recibo gerado com sucesso! Agora você pode compartilhar.');
     } catch (error) {
       console.error(error);
-      alert('Erro ao salvar a venda.');
+      alert('Erro ao processar o pedido.');
     } finally {
       setLoading(false);
     }
@@ -223,132 +154,62 @@ export default function Sales() {
     setSelectedCliente('');
     setCart([]);
     setStatus('Pendente');
-    setDesconto('');
     setSavedVendaId(null);
     setEditingVendaId(null);
   };
 
-  const handlePDF = () => {
-    const cliente = clientes.find(c => c.id === selectedCliente);
-    if (!cliente) return;
-    
-    const vendaMock = {
-      id: savedVendaId,
-      total: totalGeral,
-      status: status,
-      data: new Date()
-    };
-    
-    generatePDF(vendaMock, cliente, cart);
-  };
+  const handleSendToWhatsApp = () => {
+    let texto = `*NOVO PEDIDO*\n\n`;
+    texto += `*Cliente:* ${selectedCliente}\n`;
+    texto += `*Data:* ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n\n`;
 
-  const handleWhatsApp = () => {
-    const cliente = clientes.find(c => c.id === selectedCliente);
-    if (!cliente) return;
-    
-    const vendaMock = {
-      total: totalGeral,
-      status: status,
-      data: new Date()
-    };
-    
-    sendWhatsAppMessage(cliente.telefone, vendaMock, cliente, cart);
-  };
+    texto += `*Itens do Pedido:*\n`;
+    cart.forEach(item => {
+      texto += `- ${item.quantidade}x ${item.produto_nome} = R$ ${(Number(item.quantidade) * parseValue(item.valor)).toFixed(2).replace('.', ',')}\n`;
+    });
 
-  const handleShareImage = async () => {
-    if (!receiptRef.current) return;
-    setIsSharing(true);
-    try {
-      const fileName = `Comprovante_${clientes.find(c => c.id === selectedCliente)?.nome.split(' ')[0] || 'Venda'}.png`;
-      await shareReceiptImage(receiptRef.current, fileName);
-    } finally {
-      setIsSharing(false);
-    }
+    texto += `\n*Total:* R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
+
+    const encodedText = encodeURIComponent(texto);
+    const url = `https://wa.me/5571982983908?text=${encodedText}`;
+
+    window.open(url, '_blank');
   };
 
   return (
     <div style={{ padding: '16px 0', paddingBottom: '80px' }}>
-      {/* Elemento oculto para captura de imagem */}
-      <ReceiptToImage 
-        ref={receiptRef}
-        venda={{ 
-          id: savedVendaId, 
-          status: status, 
-          data: new Date(), 
-          desconto: Number(desconto || 0) 
-        }}
-        cliente={clientes.find(c => c.id === selectedCliente)}
-        itens={cart}
-        pagamentos={status === 'Pago' ? [{ valor: totalGeral - Number(desconto || 0), data: new Date().toISOString() }] : []}
-      />
-
       <div className="card" style={{ marginBottom: '16px' }}>
         <h2 style={{ fontSize: '18px', marginBottom: '16px' }}>Nova Venda</h2>
-        
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: 'var(--text-main)' }}>Cliente *</label>
-          
-          {selectedCliente ? (
-            <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', border: '1px solid var(--primary)', background: 'rgba(79, 70, 229, 0.05)' }}>
-              <div>
-                <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '2px', color: 'var(--primary)' }}>
-                  {clientes.find(c => c.id === selectedCliente)?.nome}
-                </h3>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  {clientes.find(c => c.id === selectedCliente)?.local || 'Sem local'}
-                </div>
-              </div>
-              {!savedVendaId && (
-                <button 
-                  onClick={() => setSelectedCliente('')} 
-                  style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
-                >
-                  <X size={20} />
-                </button>
-              )}
-            </div>
-          ) : (
-            <button 
-              className="btn btn-secondary" 
-              onClick={() => setIsClientModalOpen(true)}
-              style={{ width: '100%', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-            >
-              <Search size={18} />
-              Selecionar Cliente
-            </button>
-          )}
-        </div>
-        
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <div className="input-group" style={{ flex: 1 }}>
-            <label>Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} disabled={savedVendaId}>
-              <option value="Pendente">Pendente</option>
-              <option value="Pago">Pago</option>
-            </select>
-          </div>
-
-          <div className="input-group" style={{ flex: 1 }}>
-            <label>Desconto (R$)</label>
-            <input 
-              type="number" 
-              step="0.01" 
-              value={desconto} 
-              onChange={(e) => setDesconto(e.target.value)} 
-              placeholder="0,00"
-              disabled={savedVendaId}
-            />
-          </div>
+        <div style={{ marginBottom: '8px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500', color: 'var(--text-main)' }}>Nome do Cliente *</label>
+          <input 
+            type="text"
+            placeholder="Digite o nome..."
+            value={selectedCliente}
+            onChange={(e) => setSelectedCliente(e.target.value)}
+            disabled={!!savedVendaId}
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              borderRadius: '8px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              fontSize: '16px'
+            }}
+          />
         </div>
       </div>
 
       <div style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', padding: '0 4px' }}>
           <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>Toque para Adicionar</h3>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{produtos.length} itens</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              {produtos.length} itens
+            </div>
+          </div>
         </div>
 
-        {/* Fabricante Filter Tabs */}
         <div style={{ display: 'flex', gap: '6px', padding: '0 4px', marginBottom: '10px' }}>
           {['Todos', 'Natu', 'Solar'].map(fab => (
             <button
@@ -373,7 +234,6 @@ export default function Sales() {
           ))}
         </div>
 
-        {/* Product Search Bar */}
         <div style={{ padding: '0 4px', marginBottom: '12px' }}>
           <div style={{ position: 'relative' }}>
             <Search size={16} style={{ position: 'absolute', left: '12px', top: '10px', color: 'var(--text-muted)' }} />
@@ -395,7 +255,6 @@ export default function Sales() {
           </div>
         </div>
         
-        {/* Scrollable Product Grid */}
         <div className="product-grid-scroll" style={{ 
           maxHeight: 'calc(100vh - 300px)', 
           overflowY: 'auto', 
@@ -405,17 +264,11 @@ export default function Sales() {
           border: '1px solid var(--border)',
           marginBottom: '10px'
         }}>
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(3, 1fr)', 
-            gap: '6px', 
-          }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {produtos
               .filter(p => {
                 const matchSearch = p.nome.toLowerCase().includes(productSearchTerm.toLowerCase());
-                const matchFab = fabricanteFilter === 'Todos'
-                  ? true
-                  : p.fabricante === fabricanteFilter || p.fabricante === 'Ambos';
+                const matchFab = fabricanteFilter === 'Todos' ? true : (p.fabricante === fabricanteFilter || p.fabricante === 'Ambos');
                 return matchSearch && matchFab;
               })
               .map(p => (
@@ -424,83 +277,57 @@ export default function Sales() {
                 onClick={() => handleAddToCart(p.id)} 
                 className="card product-card-hover"
                 style={{ 
-                  padding: '4px', 
+                  padding: '8px', 
                   display: 'flex', 
-                  flexDirection: 'column', 
                   alignItems: 'center', 
+                  gap: '12px',
                   cursor: 'pointer', 
                   border: '1px solid var(--border)', 
                   background: 'var(--surface)', 
-                  height: '100%',
-                  transition: 'transform 0.1s',
-                  position: 'relative'
+                  transition: 'transform 0.1s'
                 }}
               >
-                <div style={{ width: '100%', aspectRatio: '1/1', borderRadius: '6px', background: 'var(--background)', marginBottom: '3px', overflow: 'hidden' }}>
+                <div style={{ width: '60px', height: '60px', borderRadius: '8px', background: 'var(--background)', overflow: 'hidden', flexShrink: 0 }}>
                   {p.imagem ? (
-                    <img src={p.imagem} alt={p.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={p.imagem} alt={p.nome} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   ) : (
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
                        <span style={{ fontSize: '8px', color: 'var(--text-muted)' }}>Sem Img</span>
                     </div>
                   )}
                 </div>
-                <div style={{ fontSize: '10px', fontWeight: '600', textAlign: 'center', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-main)' }}>{p.nome}</div>
-                <div style={{ fontSize: '10px', color: 'var(--primary)', fontWeight: '700', marginTop: '0px' }}>R$ {parseValue(p.valor).toFixed(2).replace('.', ',')}</div>
-                
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-main)' }}>{p.nome}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{p.fabricante}</div>
+                </div>
+                <div style={{ fontSize: '14px', color: 'var(--primary)', fontWeight: '700' }}>R$ {parseValue(p.valor).toFixed(2).replace('.', ',')}</div>
+                <Plus size={14} style={{ color: 'var(--primary)' }} />
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Floating Cart Button */}
       {cart.length > 0 && (
         <button
           onClick={() => setIsCartModalOpen(true)}
           style={{
-            position: 'fixed',
-            bottom: '90px',
-            right: '20px',
-            width: '60px',
-            height: '60px',
-            borderRadius: '50%',
-            background: 'var(--primary)',
-            color: 'white',
-            border: 'none',
-            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-            cursor: 'pointer',
-            transition: 'transform 0.2s'
+            position: 'fixed', bottom: '90px', right: '20px', width: '60px', height: '60px', borderRadius: '50%',
+            background: 'var(--primary)', color: 'white', border: 'none', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, cursor: 'pointer'
           }}
-          className="product-card-hover"
         >
           <ShoppingCart size={28} />
           <span style={{
-            position: 'absolute',
-            top: '-5px',
-            right: '-5px',
-            background: 'var(--danger)',
-            color: 'white',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            width: '24px',
-            height: '24px',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '2px solid white'
+            position: 'absolute', top: '-5px', right: '-5px', background: 'var(--danger)', color: 'white',
+            fontSize: '12px', fontWeight: 'bold', width: '24px', height: '24px', borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid white'
           }}>
             {cart.reduce((sum, item) => sum + item.quantidade, 0)}
           </span>
         </button>
       )}
 
-      {/* Cart Modal */}
       {isCartModalOpen && (
         <div style={{ 
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
@@ -510,9 +337,7 @@ export default function Sales() {
         }}>
           <div className="card" style={{ 
             width: '100%', maxWidth: '500px', padding: '0', maxHeight: '90vh', 
-            display: 'flex', flexDirection: 'column',
-            borderRadius: '24px 24px 0 0',
-            animation: 'slideUp 0.3s ease-out'
+            display: 'flex', flexDirection: 'column', borderRadius: '24px 24px 0 0'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -525,46 +350,25 @@ export default function Sales() {
             </div>
 
             <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-              {cart.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                  <ShoppingCart size={48} color="var(--border)" style={{ marginBottom: '16px' }} />
-                  <p style={{ color: 'var(--text-muted)' }}>Carrinho vazio</p>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {cart.map((item, index) => (
-                    <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '50px', height: '50px', borderRadius: '8px', background: 'var(--background)', overflow: 'hidden', flexShrink: 0 }}>
-                          {item.imagem ? (
-                            <img src={item.imagem} alt={item.produto_nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          ) : (
-                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                               <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Sem Img</span>
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: '600', fontSize: '14px', color: 'var(--text-main)' }}>{item.produto_nome}</div>
-                          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--background)', padding: '2px', borderRadius: '6px' }}>
-                              <button onClick={() => updateQuantity(index, -1)} style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', border: 'none', borderRadius: '4px', color: 'var(--text-main)' }}>-</button>
-                              <span style={{ fontWeight: '600', fontSize: '14px', minWidth: '16px', textAlign: 'center' }}>{item.quantidade}</span>
-                              <button onClick={() => updateQuantity(index, 1)} style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)', border: 'none', borderRadius: '4px', color: 'var(--text-main)' }}>+</button>
-                            </div>
-                            <div style={{ fontWeight: '600', color: 'var(--primary)' }}>
-                              R$ {(Number(item.quantidade) * parseValue(item.valor)).toFixed(2).replace('.', ',')}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <button onClick={() => removeFromCart(index)} style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: 'var(--danger)', borderRadius: '8px', padding: '8px', cursor: 'pointer' }}>
-                        <Trash2 size={18} />
-                      </button>
+              {cart.map((item, index) => (
+                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '50px', height: '50px', borderRadius: '8px', background: 'var(--background)', overflow: 'hidden' }}>
+                      {item.imagem ? <img src={item.imagem} alt={item.produto_nome} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Img</div>}
                     </div>
-                  ))}
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '14px' }}>{item.produto_nome}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                        <button onClick={() => updateQuantity(index, -1)} style={{ width: '24px', height: '24px' }}>-</button>
+                        <span>{item.quantidade}</span>
+                        <button onClick={() => updateQuantity(index, 1)} style={{ width: '24px', height: '24px' }}>+</button>
+                        <span style={{ fontWeight: '600', color: 'var(--primary)', marginLeft: '8px' }}>R$ {(item.quantidade * item.valor).toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => removeFromCart(index)} style={{ background: 'none', border: 'none', color: 'var(--danger)' }}><Trash2 size={18} /></button>
                 </div>
-              )}
+              ))}
             </div>
 
             <div style={{ padding: '20px', borderTop: '1px solid var(--border)', background: 'var(--background)' }}>
@@ -573,117 +377,30 @@ export default function Sales() {
                 <span style={{ color: 'var(--primary)' }}>R$ {totalGeral.toFixed(2).replace('.', ',')}</span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {!savedVendaId ? (
-                  <button 
-                    className="btn btn-primary" 
-                    onClick={() => { handleSave(); }} 
-                    disabled={loading || cart.length === 0}
-                    style={{ height: '54px', fontSize: '16px' }}
-                  >
-                    <Save size={20} />
-                    {loading ? 'Salvando...' : (editingVendaId ? 'Atualizar Venda' : 'Finalizar Venda')}
-                  </button>
-                ) : (
-                  <>
-                    <div style={{ textAlign: 'center', padding: '8px', color: 'var(--secondary)', fontWeight: 'bold' }}>
-                      Venda salva com sucesso!
-                    </div>
-                    
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                      <button className="btn btn-secondary" onClick={handlePDF}>
-                        <FileText size={18} />
-                        PDF
-                      </button>
-                      <button className="btn" style={{ background: '#25D366', color: 'white', border: 'none' }} onClick={handleWhatsApp}>
-                        <MessageCircle size={18} />
-                        WhatsApp
-                      </button>
-                      <button 
-                        className="btn" 
-                        style={{ gridColumn: 'span 2', background: 'var(--surface)', border: '1px solid var(--primary)', color: 'var(--primary)' }} 
-                        onClick={handleShareImage}
-                        disabled={isSharing}
-                      >
-                        <Image size={18} />
-                        {isSharing ? 'Gerando Imagem...' : 'Compartilhar Imagem'}
-                      </button>
-                    </div>
-                    
-                    <button className="btn" style={{ background: 'var(--background)', border: '1px solid var(--border)', color: 'var(--text-main)', marginTop: '8px' }} onClick={() => { resetForm(); setIsCartModalOpen(false); }}>
-                      Nova Venda
+              {!savedVendaId ? (
+                <button className="btn btn-primary" onClick={handleSave} disabled={loading} style={{ width: '100%', height: '54px' }}>
+                  <Save size={20} /> {loading ? 'Processando...' : 'Finalizar Venda'}
+                </button>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+                    <button 
+                      className="btn" 
+                      style={{ background: '#25D366', color: 'white', border: 'none', height: '54px', fontSize: '16px', fontWeight: 'bold' }} 
+                      onClick={handleSendToWhatsApp} 
+                    >
+                      <MessageCircle size={20} /> 
+                      Enviar Pedido p/ WhatsApp
                     </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Client Selection Modal */}
-      {isClientModalOpen && (
-        <div style={{ 
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          background: 'rgba(0,0,0,0.6)', zIndex: 110,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '16px', backdropFilter: 'blur(2px)'
-        }}>
-          <div className="card" style={{ width: '100%', maxWidth: '400px', padding: '0', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderBottom: '1px solid var(--border)' }}>
-              <h2 style={{ fontSize: '18px' }}>Selecione o Cliente</h2>
-              <button onClick={() => setIsClientModalOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                <X size={24} />
-              </button>
-            </div>
-            
-            <div style={{ padding: '16px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ position: 'relative' }}>
-                <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-muted)' }} />
-                <input
-                  type="text"
-                  placeholder="Buscar cliente..."
-                  value={clientSearchTerm}
-                  onChange={(e) => setClientSearchTerm(e.target.value)}
-                  style={{ 
-                    width: '100%', 
-                    padding: '10px 10px 10px 36px', 
-                    borderRadius: '8px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--background)',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-            </div>
-            
-            <div style={{ padding: '16px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {clientes
-                .filter(c => c.nome.toLowerCase().includes(clientSearchTerm.toLowerCase()))
-                .map(client => (
-                  <div 
-                    key={client.id} 
-                    onClick={() => { 
-                      setSelectedCliente(client.id); 
-                      setClientSearchTerm(''); 
-                      setIsClientModalOpen(false); 
-                    }}
-                    className="card" 
-                    style={{ padding: '12px', cursor: 'pointer', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                  >
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: '500', color: 'var(--text-main)' }}>{client.nome}</div>
-                      {client.local && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>📍 {client.local}</div>}
-                    </div>
                   </div>
-                ))}
-              {clientes.filter(c => c.nome.toLowerCase().includes(clientSearchTerm.toLowerCase())).length === 0 && (
-                 <div style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', padding: '10px' }}>Nenhum cliente encontrado</div>
+                  <button className="btn" onClick={() => { resetForm(); setIsCartModalOpen(false); }}>Nova Venda</button>
+                </div>
               )}
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

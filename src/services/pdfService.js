@@ -10,15 +10,22 @@ export const generatePDF = async (venda, cliente, itens) => {
   // Cores do tema (Primary: 79, 70, 229 / #4F46E5)
   const primaryColor = [79, 70, 229];
 
+  try {
+    doc.addImage('/logo.png', 'PNG', 14, 10, 25, 25);
+  } catch (e) {
+    console.error('Logo not found', e);
+  }
+
   // Cabeçalho da Empresa
   doc.setFontSize(22);
   doc.setTextColor(...primaryColor);
   doc.setFont("helvetica", "bold"); // define a fonte como negrito
-  doc.text('RSN CLEAN', 14, 22);
+  doc.text('✨ RSN CLEAN ✨', 42, 22);
+
 
   doc.setFontSize(10);
   doc.setTextColor(100);
-  doc.text('Recibo de Venda', 14, 28);
+  doc.text('Recibo de Venda', 42, 28);
 
   // Informações do Pedido e Cliente
   doc.setFontSize(12);
@@ -64,7 +71,9 @@ export const generatePDF = async (venda, cliente, itens) => {
   let finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) || 75;
 
   const hasPagamentos = venda.pagamentos && venda.pagamentos.length > 0;
-  const originalTotal = venda.originalTotal || venda.total;
+  const subtotal = itens.reduce((acc, item) => acc + (item.quantidade * item.valor), 0);
+  const valorDesconto = Number(venda.desconto || 0);
+  const totalComAjuste = subtotal - valorDesconto;
 
   if (hasPagamentos) {
     finalY += 10;
@@ -95,32 +104,50 @@ export const generatePDF = async (venda, cliente, itens) => {
     finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) || (finalY + 20);
   }
 
+  // Ajustar altura do retângulo de totais
+  let rectHeight = 25;
+  if (valorDesconto !== 0) rectHeight += 10;
+  if (hasPagamentos) rectHeight += 15;
+
   doc.setFillColor(243, 244, 246);
-  doc.rect(110, finalY + 10, 85, hasPagamentos ? 35 : 25, 'F');
+  doc.rect(110, finalY + 10, 85, rectHeight, 'F');
+
+  let currentY = finalY + 20;
+
+  // Subtotal
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text('Subtotal:', 115, currentY);
+  doc.text(`R$ ${subtotal.toFixed(2)}`, 190, currentY, { align: 'right' });
+  currentY += 10;
+
+  // Desconto ou Acréscimo
+  if (valorDesconto !== 0) {
+    const isDesconto = valorDesconto > 0;
+    doc.setTextColor(isDesconto ? 200 : 40); // vermelho para desconto, normal para acréscimo
+    doc.text(isDesconto ? 'Desconto:' : 'Conta Anterior:', 115, currentY);
+    doc.text(`${isDesconto ? '-' : '+'} R$ ${Math.abs(valorDesconto).toFixed(2)}`, 190, currentY, { align: 'right' });
+    currentY += 10;
+  }
 
   if (hasPagamentos) {
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text('Total da Compra:', 115, finalY + 20);
-    doc.text(`R$ ${Number(originalTotal).toFixed(2)}`, 190, finalY + 20, { align: 'right' });
-
     doc.setFontSize(12);
     doc.setTextColor(40);
-    doc.text('Saldo Devedor:', 115, finalY + 35);
+    doc.text('Saldo Devedor:', 115, currentY + 5);
 
     doc.setFontSize(14);
     doc.setTextColor(...primaryColor);
     doc.setFont('helvetica', 'bold');
-    doc.text(`R$ ${Number(venda.total).toFixed(2)}`, 190, finalY + 35, { align: 'right' });
+    doc.text(`R$ ${Number(venda.total).toFixed(2)}`, 190, currentY + 5, { align: 'right' });
   } else {
     doc.setFontSize(12);
     doc.setTextColor(40);
-    doc.text('Total do Pedido:', 115, finalY + 20);
+    doc.text('Total do Pedido:', 115, currentY + 5);
 
     doc.setFontSize(14);
     doc.setTextColor(...primaryColor);
     doc.setFont('helvetica', 'bold');
-    doc.text(`R$ ${Number(venda.total).toFixed(2)}`, 190, finalY + 20, { align: 'right' });
+    doc.text(`R$ ${totalComAjuste.toFixed(2)}`, 190, currentY + 5, { align: 'right' });
   }
 
   // Rodapé
@@ -166,15 +193,22 @@ export const generateSummaryPDF = async (vendas, clientes, startDate, endDate, t
   const doc = new jsPDF();
   const primaryColor = [79, 70, 229];
 
+  try {
+    doc.addImage('/logo.png', 'PNG', 14, 10, 25, 25);
+  } catch (e) {
+    console.error('Logo not found', e);
+  }
+
   // Cabeçalho
   doc.setFontSize(22);
   doc.setTextColor(...primaryColor);
   doc.setFont("helvetica", "bold");
-  doc.text('RSN CLEAN - RELATÓRIO GERAL', 14, 22);
+  doc.text('✨ RSN CLEAN - RELATÓRIO GERAL ✨', 42, 22);
+
 
   doc.setFontSize(10);
   doc.setTextColor(100);
-  doc.text(`Período: ${new Date(startDate).toLocaleDateString('pt-BR')} até ${new Date(endDate).toLocaleDateString('pt-BR')}`, 14, 30);
+  doc.text(`Período: ${new Date(startDate).toLocaleDateString('pt-BR')} até ${new Date(endDate).toLocaleDateString('pt-BR')}`, 42, 30);
 
   // Resumo
   doc.setFillColor(243, 244, 246);
@@ -225,6 +259,90 @@ export const generateSummaryPDF = async (vendas, clientes, startDate, endDate, t
       });
       await Share.share({
         title: 'Relatório Geral de Vendas',
+        url: savedFile.uri
+      });
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      alert('Erro ao gerar relatório.');
+    }
+  } else {
+    doc.save(fileBaseName);
+  }
+};
+
+export const generateDetailedItemsPDF = async (groupedData, startDate, endDate) => {
+  const doc = new jsPDF();
+  const primaryColor = [79, 70, 229];
+
+  try {
+    doc.addImage('/logo.png', 'PNG', 14, 10, 25, 25);
+  } catch (e) {
+    console.error('Logo not found', e);
+  }
+
+  // Cabeçalho
+  doc.setFontSize(22);
+  doc.setTextColor(...primaryColor);
+  doc.setFont("helvetica", "bold");
+  doc.text('✨ RSN CLEAN - RELATÓRIO POR ITENS ✨', 42, 22);
+
+
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Período: ${new Date(startDate).toLocaleDateString('pt-BR')} até ${new Date(endDate).toLocaleDateString('pt-BR')}`, 42, 30);
+
+  let currentY = 40;
+
+  // Itera sobre cada cliente no dado agrupado
+  Object.keys(groupedData).forEach((clienteName) => {
+    // Verifica se precisa de nova página
+    if (currentY > 250) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFontSize(12);
+    doc.setTextColor(40);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Cliente: ${clienteName}`, 14, currentY);
+    currentY += 5;
+
+    const products = groupedData[clienteName];
+    const tableData = Object.keys(products).map(prodName => [
+      prodName,
+      products[prodName].qtd.toString(),
+      `R$ ${products[prodName].total.toFixed(2)}`
+    ]);
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Produto', 'Qtd Total', 'Valor Total']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: primaryColor },
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        0: { cellWidth: 'auto' },
+        1: { cellWidth: 30, halign: 'center' },
+        2: { cellWidth: 40, halign: 'right' }
+      }
+    });
+
+    currentY = doc.lastAutoTable.finalY + 15;
+  });
+
+  const fileBaseName = `Relatorio_Detalhado_${startDate}_${endDate}.pdf`;
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const pdfBase64 = doc.output('datauristring').split(',')[1];
+      const savedFile = await Filesystem.writeFile({
+        path: fileBaseName,
+        data: pdfBase64,
+        directory: Directory.Cache
+      });
+      await Share.share({
+        title: 'Relatório Detalhado por Itens',
         url: savedFile.uri
       });
     } catch (error) {

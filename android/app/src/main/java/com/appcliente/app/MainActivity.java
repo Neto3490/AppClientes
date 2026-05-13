@@ -1,4 +1,4 @@
-package com.antgravit.app;
+package com.appcliente.app;
 
 import com.getcapacitor.BridgeActivity;
 
