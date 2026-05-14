@@ -138,10 +138,29 @@ export default function Sales() {
     
     setLoading(true);
     try {
-      const mockId = 'OFF-' + Date.now().toString().slice(-6);
-      setSavedVendaId(mockId);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      alert('Recibo gerado com sucesso! Agora você pode compartilhar.');
+      // 1. Montar a mensagem do WhatsApp
+      let texto = `*NOVO PEDIDO*\n\n`;
+      texto += `*Cliente:* ${selectedCliente}\n`;
+      texto += `*Data:* ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n\n`;
+
+      texto += `*Itens do Pedido:*\n`;
+      cart.forEach(item => {
+        texto += `- ${item.quantidade}x ${item.produto_nome} = R$ ${(Number(item.quantidade) * parseValue(item.valor)).toFixed(2).replace('.', ',')}\n`;
+      });
+
+      texto += `\n*Total:* R$ ${totalGeral.toFixed(2).replace('.', ',')}`;
+
+      const encodedText = encodeURIComponent(texto);
+      const url = `https://wa.me/5571982983908?text=${encodedText}`;
+
+      // 2. Abrir o WhatsApp direto
+      window.open(url, '_blank');
+      
+      // 3. Feedback e Reset
+      alert('Mensagem enviada com sucesso!');
+      resetForm();
+      setIsCartModalOpen(false);
+      
     } catch (error) {
       console.error(error);
       alert('Erro ao processar o pedido.');
@@ -378,25 +397,9 @@ export default function Sales() {
                 <span style={{ color: 'var(--primary)' }}>R$ {totalGeral.toFixed(2).replace('.', ',')}</span>
               </div>
 
-              {!savedVendaId ? (
-                <button className="btn btn-primary" onClick={handleSave} disabled={loading} style={{ width: '100%', height: '54px' }}>
-                  <Save size={20} /> {loading ? 'Processando...' : 'Finalizar Venda'}
-                </button>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
-                    <button 
-                      className="btn" 
-                      style={{ background: '#25D366', color: 'white', border: 'none', height: '54px', fontSize: '16px', fontWeight: 'bold' }} 
-                      onClick={handleSendToWhatsApp} 
-                    >
-                      <MessageCircle size={20} /> 
-                      Enviar Pedido p/ WhatsApp
-                    </button>
-                  </div>
-                  <button className="btn" onClick={() => { resetForm(); setIsCartModalOpen(false); }}>Nova Venda</button>
-                </div>
-              )}
+              <button className="btn btn-primary" onClick={handleSave} disabled={loading} style={{ width: '100%', height: '54px' }}>
+                <MessageCircle size={20} /> {loading ? 'Enviando...' : 'Finalizar e Enviar WhatsApp'}
+              </button>
             </div>
           </div>
         </div>
